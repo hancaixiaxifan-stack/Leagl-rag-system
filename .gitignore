@@ -1,0 +1,135 @@
+# ===========================
+# Environment & Secrets
+# ===========================
+.env
+.env.*
+!.env.example
+
+# ===========================
+# Python
+# ===========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Testing / Linting
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ===========================
+# Node.js
+# ===========================
+node_modules/
+.next/
+out/
+build/
+*.tsbuildinfo
+
+# ===========================
+# IDE & OS
+# ===========================
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.cursor/
+.claude/
+
+# ===========================
+# Data & Large Artifacts
+# ===========================
+
+# Generated embeddings, chunks, drift reports (rebuildable via scripts)
+data/
+!data/.gitkeep
+
+# Vector database storage
+qdrant_data/
+
+# Raw legal documents — large binary files (~227 MB)
+# Public domain legislation; can be re-acquired and re-ingested
+law/
+
+# Experiment outputs, caches, annotations (generated)
+experiments/
+
+# ===========================
+# Papers & Research
+# ===========================
+# LaTeX build artifacts
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+*.toc
+texput.log
+
+# Compiled PDFs & previews (source .tex files stay in git)
+papers/draft/*.pdf
+papers/draft/pdf_preview/
+
+# Paper-related directories
+papers/
+docs/
+docs_cn/
+
+# Figure prompts
+prompts_4figures.md
+
+# ===========================
+# Scripts — keep system essentials only
+# ===========================
+scripts/*
+!scripts/ingest.py
+!scripts/build_vector_index.py
+!scripts/serve.py
+!scripts/extract_citations.py
+!scripts/probe_embeddings.py
+!scripts/inspect_env.py
+!scripts/smoke_api.py
+!scripts/test_counterfactual.py
+!scripts/test_sample_ingest.py
+!scripts/test_lineage_one_law.py
+!scripts/test_keyword_coverage.py
+
+# ===========================
+# Temporary & Personal
+# ===========================
+tmp_*/
+tmp_*.json
+*.tmp
+
+# Personal working notes & local materials
+new/
+RAG项目技术回顾/
+文献/
+论文/
+论文.zip
