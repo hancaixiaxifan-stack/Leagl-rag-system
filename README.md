@@ -195,7 +195,21 @@ python scripts/smoke_api.py
 
 - **后端**：FastAPI、Qdrant（本地向量库）、fastembed（ONNX 本地嵌入）、jieba（中文分词）、rank-bm25、OpenAI SDK（兼容 DeepSeek）
 - **前端**：Next.js 16、React 19、TypeScript、Tailwind CSS、shadcn/ui、vis-network、echarts/recharts
-- **检索**：向量 cosine similarity（权重 0.65）+ BM25 jieba 分词（权重 0.35），min-max 归一化后融合。当向量 top-1 分数 ≥ 0.75 时跳过 BM25，仅用向量结果
+- **检索**：Hybrid-on-Demand 动态混合检索。主路径为本地向量检索（bge-small-zh-v1.5，余弦相似度）；当 top-1 向量分数 ≥ 0.75 时直接返回，跳过 BM25。若置信度不足，则激活 BM25 重排（jieba 分词），经 min-max 归一化后按向量 0.65 + BM25 0.35 加权融合。权重为经验设定，详见 `experiments/RESULTS.md` 第 6 节。
+
+## 可靠性评估
+
+系统通过五层评估验证核心功能的可靠性：
+
+| 评估层级 | 脚本 | 说明 |
+|---------|------|------|
+| 回溯验证 | `scripts/backtesting_validation.py` | 用历史真实修订当 GT，验证反事实模拟（专利法 8 组，Recall 11.4% / Precision 30.8%） |
+| 批量评估 | `scripts/batch_evaluation.py` | Hard GT（C∩D）下的多法批量测试（刑法 22 条，Mean R_hard 0.952） |
+| 消融实验 | `scripts/ablation_factorial.py` | 2×2 因子验证候选集构建（Graph vs Semantic，零重叠证明双源必要） |
+| Hard Subset | `scripts/hard_subset_eval.py` | 94K 对检索表征，验证 low-overlap 场景短板（Δ −4.02%） |
+| 人工标注 | `scripts/human_eval_4annotator.py` | 4 人标注，旧 200 对（κ=0.782）+ 新 450 对（κ=0.228） |
+
+完整评估结果与实验上下文见 **`experiments/RESULTS.md`**。
 
 ## 目录结构
 
@@ -223,12 +237,31 @@ rag_contract/             # 核心库
   counterfactual.py       # 反事实模拟
   settings.py             # 配置管理
 
-scripts/                  # 系统脚本
+scripts/                  # 系统脚本与评估脚本
+  # 核心流程
   ingest.py               # 全量构建知识库
   build_vector_index.py   # 仅重建向量索引
   serve.py                # 启动 FastAPI
   extract_citations.py    # 提取跨法律引用
+
+  # 诊断
   probe_embeddings.py     # 检查向量嵌入
   inspect_env.py          # 环境检查
   smoke_api.py            # API 冒烟测试
+
+  # 单元测试
+  test_counterfactual.py  # 反事实模拟单元测试
+  test_sample_ingest.py   # 血缘样本测试
+  test_lineage_one_law.py # 公司法专项血缘测试
+  test_keyword_coverage.py# 关键词捕获率测试
+
+  # 可靠性评估（详见 experiments/RESULTS.md）
+  backtesting_validation.py   # 回溯验证：反事实 vs 历史修订
+  batch_evaluation.py         # 批量评估（刑法/民航法/民法典）
+  ablation_factorial.py       # 2×2 消融实验（刑法第234条）
+  ablation_civilcode.py       # 民法典消融
+  ablation_aviation.py        # 民航法消融
+  hard_subset_eval.py         # Hard subset 检索分析
+  human_eval_4annotator.py    # 4 标注员一致性分析
+  retrieval_comparison.py     # 纯检索对比（Graph/BM25/Vector）
 ```

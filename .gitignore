@@ -75,7 +75,8 @@ qdrant_data/
 law/
 
 # Experiment outputs, caches, annotations (generated)
-experiments/
+experiments/*
+!experiments/RESULTS.md
 
 # ===========================
 # Papers & Research
@@ -105,20 +106,37 @@ docs_cn/
 prompts_4figures.md
 
 # ===========================
-# Scripts — keep system essentials only
+# Scripts — system essentials + reliability evaluation
 # ===========================
 scripts/*
+
+# Core pipeline
 !scripts/ingest.py
 !scripts/build_vector_index.py
 !scripts/serve.py
 !scripts/extract_citations.py
+
+# Diagnostics
 !scripts/probe_embeddings.py
 !scripts/inspect_env.py
+
+# Unit / smoke tests
 !scripts/smoke_api.py
 !scripts/test_counterfactual.py
 !scripts/test_sample_ingest.py
 !scripts/test_lineage_one_law.py
 !scripts/test_keyword_coverage.py
+
+# Reliability evaluation — backtesting, ablation, batch eval, human annotation
+!scripts/backtesting_validation.py
+!scripts/batch_evaluation.py
+!scripts/ablation_factorial.py
+!scripts/ablation_constrained.py
+!scripts/ablation_aviation.py
+!scripts/ablation_civilcode.py
+!scripts/hard_subset_eval.py
+!scripts/human_eval_4annotator.py
+!scripts/retrieval_comparison.py
 
 # ===========================
 # Temporary & Personal
