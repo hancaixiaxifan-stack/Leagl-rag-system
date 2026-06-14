@@ -49,8 +49,8 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --background: #f8f6f1;
+  --foreground: #1f2933;
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
@@ -123,8 +123,89 @@
   }
   body {
     @apply bg-background text-foreground;
+    background:
+      radial-gradient(circle at top left, rgba(31, 58, 95, 0.05), transparent 28rem),
+      linear-gradient(180deg, #fbfaf6 0%, #f4f0e8 100%);
   }
   html {
     @apply font-sans;
+  }
+}
+
+@layer components {
+  .legal-card {
+    @apply rounded-lg border bg-[#fffefa] shadow-sm transition-[border-color,box-shadow,transform] duration-200;
+    border-color: #e1dbcf;
+    box-shadow: 0 1px 1px rgba(31, 41, 51, 0.03), 0 12px 30px rgba(31, 41, 51, 0.06);
+  }
+
+  .legal-card:hover {
+    border-color: #cfc5b5;
+    box-shadow: 0 1px 1px rgba(31, 41, 51, 0.04), 0 16px 38px rgba(31, 41, 51, 0.08);
+  }
+
+  .legal-rule {
+    background-image: linear-gradient(to right, rgba(31, 58, 95, 0.18) 1px, transparent 1px);
+    background-size: 10px 1px;
+  }
+
+  .legal-input {
+    @apply rounded-md border bg-[#fffefa] text-sm transition-[border-color,box-shadow,transform] duration-200;
+    border-color: #d8d0c1;
+    box-shadow: 0 0 0 0 rgba(31, 58, 95, 0);
+  }
+
+  .legal-input:hover {
+    border-color: #bdb39f;
+  }
+
+  .legal-input:focus,
+  .legal-input:focus-visible,
+  .legal-input[data-open="true"] {
+    border-color: #1f3a5f;
+    box-shadow: 0 0 0 3px rgba(31, 58, 95, 0.12);
+    outline: none;
+  }
+
+  .legal-action {
+    @apply relative inline-flex items-center overflow-hidden rounded-md border px-3 py-2 text-sm font-medium transition-colors duration-300;
+    border-color: #1f3a5f;
+    color: #1f3a5f;
+  }
+
+  .legal-action::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 0;
+    background: #1f3a5f;
+    transition: width 240ms cubic-bezier(0.65, 0, 0.076, 1);
+    z-index: 0;
+  }
+
+  .legal-action:hover::before,
+  .legal-action:focus-visible::before {
+    width: 100%;
+  }
+
+  .legal-action > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .legal-action .legal-action-icon {
+    color: #1f3a5f;
+    transition: transform 240ms cubic-bezier(0.65, 0, 0.076, 1);
+  }
+
+  .legal-action:hover,
+  .legal-action:focus-visible {
+    color: #fffefa;
+  }
+
+  .legal-action:hover .legal-action-icon,
+  .legal-action:focus-visible .legal-action-icon {
+    color: #fffefa;
+    transform: translateX(0.18rem);
   }
 }

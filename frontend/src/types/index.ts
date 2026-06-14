@@ -162,6 +162,38 @@ export interface DominoStats {
   law_count: number;
 }
 
+export interface KnowledgeGraphNode extends DominoNode {
+  node_type: "law" | "article";
+  inbound_count: number;
+  outbound_count: number;
+  degree: number;
+}
+
+export interface KnowledgeGraphEdge extends DominoEdge {
+  reference_text?: string;
+  count?: number;
+}
+
+export interface KnowledgeGraphStats {
+  mode?: "overview" | "subgraph" | "full" | string;
+  total_nodes: number;
+  total_edges: number;
+  returned_nodes: number;
+  returned_edges: number;
+  law_count: number;
+  article_count: number;
+  truncated: boolean;
+  version?: string;
+  target_law?: string;
+  target_article?: string;
+}
+
+export interface KnowledgeGraphResponse {
+  nodes: KnowledgeGraphNode[];
+  edges: KnowledgeGraphEdge[];
+  stats: KnowledgeGraphStats;
+}
+
 // ─────────────────────────────────────────────
 // Direction 4: 反事实模拟（Counterfactual）
 // ─────────────────────────────────────────────

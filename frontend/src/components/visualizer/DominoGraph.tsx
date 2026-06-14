@@ -9,19 +9,19 @@ import type { DominoNode, DominoEdge } from "@/types";
 // ─────────────────────────────────────────────
 
 const RISK_COLOR_MAP: Record<string, string> = {
-  High: "#ef4444",      // 红色
-  Medium: "#f59e0b",    // 橙色
-  Low: "#10b981",       // 绿色
-  Potential: "#6366f1", // 靛蓝
-  Unknown: "#94a3b8",   // 灰色
+  High: "#b42318",
+  Medium: "#b45309",
+  Low: "#047857",
+  Potential: "#4338ca",
+  Unknown: "#1f3a5f",
 };
 
 const RISK_BG_MAP: Record<string, string> = {
-  High: "rgba(239,68,68,0.15)",
-  Medium: "rgba(245,158,11,0.15)",
-  Low: "rgba(16,185,129,0.15)",
-  Potential: "rgba(99,102,241,0.15)",
-  Unknown: "rgba(148,163,184,0.15)",
+  High: "#fff1f0",
+  Medium: "#fff7e6",
+  Low: "#ecfdf3",
+  Potential: "#eef2ff",
+  Unknown: "#f0f5fb",
 };
 
 const NODE_SIZE_MAP: Record<string, number> = {
@@ -37,7 +37,7 @@ const NODE_FONT_SIZE_MAP: Record<string, number> = {
 };
 
 /** 节点上限保护 */
-const MAX_NODES = 500;
+const MAX_NODES = 1200;
 
 // ─────────────────────────────────────────────
 // Props
@@ -64,19 +64,19 @@ function buildVisNodes(nodes: DominoNode[]): Node[] {
       background: RISK_BG_MAP[n.risk_level] ?? RISK_BG_MAP.Unknown,
       border: RISK_COLOR_MAP[n.risk_level] ?? RISK_COLOR_MAP.Unknown,
       highlight: {
-        background: RISK_COLOR_MAP[n.risk_level] ?? RISK_COLOR_MAP.Unknown,
-        border: "#e2e8f0",
+        background: "#fffefa",
+        border: "#1f3a5f",
       },
     },
     font: {
       size: NODE_FONT_SIZE_MAP[n.level] ?? 10,
-      color: n.level === "trigger" ? "#e2e8f0" : "#cbd5e1",
+      color: n.level === "trigger" ? "#1f2933" : "#394453",
       face: "system-ui, sans-serif",
       multi: "html",
     },
     borderWidth: n.level === "trigger" ? 3 : 1,
     borderWidthSelected: n.level === "trigger" ? 4 : 2,
-    shadow: n.level === "trigger" ? { enabled: true, color: "rgba(239,68,68,0.4)", size: 16 } : { enabled: false },
+    shadow: n.level === "trigger" ? { enabled: true, color: "rgba(31,58,95,0.18)", size: 14 } : { enabled: false },
     margin: n.level === "trigger" ? 10 : 6,
     // 透传原始数据以便事件回调使用
     data: n,
@@ -90,11 +90,11 @@ function buildVisEdges(edges: DominoEdge[]): Edge[] {
     to: e.to,
     color: {
       color: e.is_indirect
-        ? "rgba(99,102,241,0.4)"
+        ? "rgba(67,56,202,0.32)"
         : (RISK_COLOR_MAP[e.risk_level] ?? RISK_COLOR_MAP.Unknown),
-      opacity: e.is_indirect ? 0.5 : 0.8,
+      opacity: e.is_indirect ? 0.45 : 0.68,
     },
-    width: e.is_indirect ? 1 : 2,
+    width: e.is_indirect ? 1 : 1.6,
     dashes: e.is_indirect,
     arrows: { to: { enabled: true, scaleFactor: 0.6 } },
     smooth: { type: "continuous", roundness: 0.2 },
@@ -157,9 +157,9 @@ export default function DominoGraph({ nodes, edges, onNodeClick, onNodeDoubleCli
         enabled: true,
         solver: "forceAtlas2Based",
         forceAtlas2Based: {
-          gravitationalConstant: -60,
+          gravitationalConstant: -72,
           centralGravity: 0.005,
-          springLength: 140,
+          springLength: 120,
           springConstant: 0.08,
           damping: 0.4,
           avoidOverlap: 0.5,
