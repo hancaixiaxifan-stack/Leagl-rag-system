@@ -919,6 +919,517 @@ def domino_impact_stats() -> dict:
     }
 
 
+def _unwrap_law_title(title: str) -> str:
+    title = (title or "").strip()
+    if title.startswith("《") and "》" in title:
+        return title[1:title.index("》")]
+    return title
+
+
+def _split_graph_key(key: str) -> tuple[str, str]:
+    key = (key or "").strip()
+    if key.startswith("《") and "》" in key:
+        close = key.index("》")
+        return key[1:close], key[close + 1:] or "整部法律"
+    return "", key
+
+
+def _graph_law_id(law_title: str) -> str:
+    return f"law::{law_title}"
+
+
+def _graph_article_id(law_title: str, article_no: str) -> str:
+    if article_no == "整部法律":
+        return _graph_law_id(law_title)
+    return f"article::{law_title}::{article_no}"
+
+
+def _short_law_label(law_title: str) -> str:
+    label = law_title.replace("中华人民共和国", "")
+    return label or law_title
+
+
+def _citation_degree_risk(total_degree: int) -> str:
+    if total_degree >= 8:
+        return "High"
+    if total_degree >= 3:
+        return "Medium"
+    if total_degree > 0:
+        return "Low"
+    return "Unknown"
+
+
+@app.get("/knowledge_graph")
+def knowledge_graph(
+    max_nodes: int = Query(5000, ge=200, le=10000),
+    include_law_edges: bool = Query(True),
+) -> dict:
+    """返回前端知识图谱所需的全量引用网络。
+
+    该接口不替代 /domino_impact；它负责全局图谱展示，/domino_impact 继续负责
+    选中条文后的传播链分析。
+    """
+    analyzer = DominoAnalyzer.get_instance()
+    analyzer.load()
+
+    by_article = analyzer.by_article
+    article_meta: dict[str, dict[str, str | int | None]] = {}
+    law_titles: set[str] = {_unwrap_law_title(law) for law in analyzer.laws if law}
+    edge_map: dict[tuple[str, str, str], dict] = {}
+    in_degree: defaultdict[str, int] = defaultdict(int)
+    out_degree: defaultdict[str, int] = defaultdict(int)
+
+    def add_article(
+        law_title: str,
+        article_no: str,
+        reference_text: str | None = None,
+        keyword: str | None = None,
+    ) -> str:
+        law_title = _unwrap_law_title(law_title)
+        article_no = article_no or "整部法律"
+        if law_title:
+            law_titles.add(law_title)
+        node_id = _graph_article_id(law_title, article_no)
+        if article_no != "整部法律":
+            current = article_meta.get(node_id)
+            if current is None:
+                article_meta[node_id] = {
+                    "id": node_id,
+                    "law_title": law_title,
+                    "article_no": article_no,
+                    "reference_text": reference_text,
+                    "keyword": keyword,
+                }
+            else:
+                if reference_text and not current.get("reference_text"):
+                    current["reference_text"] = reference_text
+                if keyword and not current.get("keyword"):
+                    current["keyword"] = keyword
+        return node_id
+
+    def add_edge(source_id: str, target_id: str, label: str, reference_text: str | None = None) -> None:
+        if not source_id or not target_id or source_id == target_id:
+            return
+        key = (source_id, target_id, label)
+        if key not in edge_map:
+            edge_map[key] = {
+                "from": source_id,
+                "to": target_id,
+                "label": label,
+                "risk_level": "Unknown",
+                "is_indirect": label != "包含",
+                "reference_text": reference_text,
+                "count": 1,
+            }
+        else:
+            edge_map[key]["count"] += 1
+            if reference_text and not edge_map[key].get("reference_text"):
+                edge_map[key]["reference_text"] = reference_text
+        out_degree[source_id] += 1
+        in_degree[target_id] += 1
+
+    for cited_key, citing_items in by_article.items():
+        cited_law, cited_article = _split_graph_key(cited_key)
+        cited_id = add_article(cited_law, cited_article)
+        for cite in citing_items:
+            citing_law = _unwrap_law_title(str(cite.get("citing_law", "")))
+            citing_article = str(cite.get("citing_article", "") or "整部法律")
+            reference_text = cite.get("reference_text")
+            keyword = cite.get("keyword")
+            citing_id = add_article(citing_law, citing_article, reference_text, keyword)
+            add_edge(cited_id, citing_id, "引用传导", reference_text)
+
+    for meta in article_meta.values():
+        law_title = str(meta["law_title"])
+        node_id = str(meta["id"])
+        if include_law_edges:
+            add_edge(_graph_law_id(law_title), node_id, "包含")
+
+    nodes: list[dict] = []
+    for law_title in sorted(law_titles):
+        if not law_title:
+            continue
+        node_id = _graph_law_id(law_title)
+        total_degree = in_degree[node_id] + out_degree[node_id]
+        nodes.append({
+            "id": node_id,
+            "label": _short_law_label(law_title),
+            "law_title": law_title,
+            "article_no": "整部法律",
+            "node_type": "law",
+            "risk_level": "Unknown",
+            "level": "trigger",
+            "reference_text": "法律节点，连接本法条文与跨法律引用关系。",
+            "keyword": "法律",
+            "inbound_count": in_degree[node_id],
+            "outbound_count": out_degree[node_id],
+            "degree": total_degree,
+        })
+
+    for meta in article_meta.values():
+        law_title = str(meta["law_title"])
+        article_no = str(meta["article_no"])
+        node_id = str(meta["id"])
+        total_degree = in_degree[node_id] + out_degree[node_id]
+        nodes.append({
+            "id": node_id,
+            "label": f"{_short_law_label(law_title)}\n{article_no}",
+            "law_title": law_title,
+            "article_no": article_no,
+            "node_type": "article",
+            "risk_level": _citation_degree_risk(total_degree),
+            "level": "indirect",
+            "reference_text": meta.get("reference_text"),
+            "keyword": meta.get("keyword") or "引用条文",
+            "inbound_count": in_degree[node_id],
+            "outbound_count": out_degree[node_id],
+            "degree": total_degree,
+        })
+
+    edges = list(edge_map.values())
+    for edge in edges:
+        edge["risk_level"] = _citation_degree_risk(
+            in_degree[edge["to"]] + out_degree[edge["to"]]
+        )
+
+    total_nodes = len(nodes)
+    total_edges = len(edges)
+    returned_nodes = nodes
+    returned_edges = edges
+    truncated = total_nodes > max_nodes
+    if truncated:
+        law_nodes = [node for node in nodes if node["node_type"] == "law"]
+        article_nodes = sorted(
+            [node for node in nodes if node["node_type"] == "article"],
+            key=lambda node: int(node.get("degree") or 0),
+            reverse=True,
+        )
+        remaining = max(max_nodes - len(law_nodes), 0)
+        returned_nodes = law_nodes + article_nodes[:remaining]
+        allowed = {node["id"] for node in returned_nodes}
+        returned_edges = [
+            edge for edge in edges
+            if edge["from"] in allowed and edge["to"] in allowed
+        ]
+
+    return {
+        "nodes": returned_nodes,
+        "edges": returned_edges,
+        "stats": {
+            "total_nodes": total_nodes,
+            "total_edges": total_edges,
+            "returned_nodes": len(returned_nodes),
+            "returned_edges": len(returned_edges),
+            "law_count": len([law for law in law_titles if law]),
+            "article_count": len(article_meta),
+            "truncated": truncated,
+            "version": analyzer._graph.get("version"),
+        },
+    }
+
+
+def _edge_risk_from_count(count: int) -> str:
+    if count >= 20:
+        return "High"
+    if count >= 5:
+        return "Medium"
+    if count > 0:
+        return "Low"
+    return "Unknown"
+
+
+def _build_graph_runtime() -> dict:
+    analyzer = DominoAnalyzer.get_instance()
+    analyzer.load()
+
+    article_meta: dict[str, dict[str, str | None]] = {}
+    law_titles: set[str] = {_unwrap_law_title(law) for law in analyzer.laws if law}
+    citation_edges: dict[tuple[str, str], dict] = {}
+    law_edges: dict[tuple[str, str], dict] = {}
+    in_degree: defaultdict[str, int] = defaultdict(int)
+    out_degree: defaultdict[str, int] = defaultdict(int)
+    law_in_degree: defaultdict[str, int] = defaultdict(int)
+    law_out_degree: defaultdict[str, int] = defaultdict(int)
+    article_ids_by_law: defaultdict[str, list[str]] = defaultdict(list)
+    inbound_neighbors: defaultdict[str, set[str]] = defaultdict(set)
+    outbound_neighbors: defaultdict[str, set[str]] = defaultdict(set)
+
+    def add_article(law_title: str, article_no: str, reference_text: str | None, keyword: str | None) -> str:
+        law_title = _unwrap_law_title(law_title)
+        article_no = article_no or "整部法律"
+        if law_title:
+            law_titles.add(law_title)
+        node_id = _graph_article_id(law_title, article_no)
+        if article_no != "整部法律" and node_id not in article_meta:
+            article_meta[node_id] = {
+                "law_title": law_title,
+                "article_no": article_no,
+                "reference_text": reference_text,
+                "keyword": keyword,
+            }
+            article_ids_by_law[law_title].append(node_id)
+        return node_id
+
+    def add_citation_edge(source_id: str, target_id: str, reference_text: str | None) -> None:
+        if not source_id or not target_id or source_id == target_id:
+            return
+        key = (source_id, target_id)
+        if key not in citation_edges:
+            citation_edges[key] = {
+                "from": source_id,
+                "to": target_id,
+                "label": "引用传导",
+                "risk_level": "Unknown",
+                "is_indirect": True,
+                "reference_text": reference_text,
+                "count": 1,
+            }
+        else:
+            citation_edges[key]["count"] += 1
+            if reference_text and not citation_edges[key].get("reference_text"):
+                citation_edges[key]["reference_text"] = reference_text
+        in_degree[target_id] += 1
+        out_degree[source_id] += 1
+        inbound_neighbors[target_id].add(source_id)
+        outbound_neighbors[source_id].add(target_id)
+
+    def add_law_edge(source_law: str, target_law: str, reference_text: str | None) -> None:
+        source_law = _unwrap_law_title(source_law)
+        target_law = _unwrap_law_title(target_law)
+        if not source_law or not target_law or source_law == target_law:
+            return
+        source_id = _graph_law_id(source_law)
+        target_id = _graph_law_id(target_law)
+        key = (source_id, target_id)
+        if key not in law_edges:
+            law_edges[key] = {
+                "from": source_id,
+                "to": target_id,
+                "label": "跨法律引用",
+                "risk_level": "Unknown",
+                "is_indirect": False,
+                "reference_text": reference_text,
+                "count": 1,
+            }
+        else:
+            law_edges[key]["count"] += 1
+            if reference_text and not law_edges[key].get("reference_text"):
+                law_edges[key]["reference_text"] = reference_text
+        law_in_degree[target_id] += 1
+        law_out_degree[source_id] += 1
+
+    for cited_key, citing_items in analyzer.by_article.items():
+        cited_law, cited_article = _split_graph_key(cited_key)
+        cited_id = add_article(cited_law, cited_article, None, None)
+        for cite in citing_items:
+            citing_law = _unwrap_law_title(str(cite.get("citing_law", "")))
+            citing_article = str(cite.get("citing_article", "") or "整部法律")
+            reference_text = cite.get("reference_text")
+            keyword = cite.get("keyword")
+            citing_id = add_article(citing_law, citing_article, reference_text, keyword)
+            add_citation_edge(cited_id, citing_id, reference_text)
+            add_law_edge(cited_law, citing_law, reference_text)
+
+    for edge in citation_edges.values():
+        edge["risk_level"] = _edge_risk_from_count(int(edge.get("count") or 0))
+    for edge in law_edges.values():
+        edge["risk_level"] = _edge_risk_from_count(int(edge.get("count") or 0))
+
+    return {
+        "article_meta": article_meta,
+        "law_titles": law_titles,
+        "citation_edges": citation_edges,
+        "law_edges": law_edges,
+        "in_degree": in_degree,
+        "out_degree": out_degree,
+        "law_in_degree": law_in_degree,
+        "law_out_degree": law_out_degree,
+        "article_ids_by_law": article_ids_by_law,
+        "inbound_neighbors": inbound_neighbors,
+        "outbound_neighbors": outbound_neighbors,
+        "version": analyzer._graph.get("version"),
+    }
+
+
+def _knowledge_graph_stats(runtime: dict, mode: str, returned_nodes: int, returned_edges: int) -> dict:
+    return {
+        "mode": mode,
+        "total_nodes": len(runtime["law_titles"]) + len(runtime["article_meta"]),
+        "total_edges": len(runtime["citation_edges"]) + len(runtime["article_meta"]),
+        "returned_nodes": returned_nodes,
+        "returned_edges": returned_edges,
+        "law_count": len([law for law in runtime["law_titles"] if law]),
+        "article_count": len(runtime["article_meta"]),
+        "truncated": False,
+        "version": runtime["version"],
+    }
+
+
+def _law_overview_node(runtime: dict, law_title: str) -> dict:
+    node_id = _graph_law_id(law_title)
+    degree = runtime["law_in_degree"][node_id] + runtime["law_out_degree"][node_id]
+    article_count = len(runtime["article_ids_by_law"][law_title])
+    return {
+        "id": node_id,
+        "label": _short_law_label(law_title),
+        "law_title": law_title,
+        "article_no": "整部法律",
+        "node_type": "law",
+        "risk_level": _edge_risk_from_count(degree),
+        "level": "trigger",
+        "reference_text": f"法律总览节点。引用网络内收录 {article_count} 个相关条文节点。",
+        "keyword": "法律总览",
+        "inbound_count": runtime["law_in_degree"][node_id],
+        "outbound_count": runtime["law_out_degree"][node_id],
+        "degree": degree,
+    }
+
+
+def _article_graph_node(runtime: dict, node_id: str) -> dict | None:
+    meta = runtime["article_meta"].get(node_id)
+    if not meta:
+        return None
+    law_title = str(meta["law_title"])
+    article_no = str(meta["article_no"])
+    degree = runtime["in_degree"][node_id] + runtime["out_degree"][node_id]
+    return {
+        "id": node_id,
+        "label": f"{_short_law_label(law_title)}\n{article_no}",
+        "law_title": law_title,
+        "article_no": article_no,
+        "node_type": "article",
+        "risk_level": _citation_degree_risk(degree),
+        "level": "indirect",
+        "reference_text": meta.get("reference_text"),
+        "keyword": meta.get("keyword") or "引用条文",
+        "inbound_count": runtime["in_degree"][node_id],
+        "outbound_count": runtime["out_degree"][node_id],
+        "degree": degree,
+    }
+
+
+def _containment_edge(law_title: str, article_id: str) -> dict:
+    return {
+        "from": _graph_law_id(law_title),
+        "to": article_id,
+        "label": "包含",
+        "risk_level": "Low",
+        "is_indirect": False,
+        "count": 1,
+    }
+
+
+@app.get("/knowledge_graph/overview")
+def knowledge_graph_overview() -> dict:
+    """轻量法律层聚合图，用作可视化分析首屏。"""
+    runtime = _build_graph_runtime()
+    nodes = [
+        _law_overview_node(runtime, law)
+        for law in sorted(runtime["law_titles"])
+        if law
+    ]
+    edges = list(runtime["law_edges"].values())
+    return {
+        "nodes": nodes,
+        "edges": edges,
+        "stats": _knowledge_graph_stats(runtime, "overview", len(nodes), len(edges)),
+    }
+
+
+@app.get("/knowledge_graph/subgraph")
+def knowledge_graph_subgraph(
+    law_title: str = Query(..., min_length=1, max_length=200),
+    article_no: str | None = Query(None, max_length=50),
+    max_hops: int = Query(1, ge=1, le=3),
+    max_neighbors: int = Query(220, ge=30, le=800),
+) -> dict:
+    """返回某部法律或某个条文的局部图，避免前端一次性布局全量条文图。"""
+    runtime = _build_graph_runtime()
+    selected_law = _unwrap_law_title(law_title)
+    selected_article = article_no or "整部法律"
+    article_meta = runtime["article_meta"]
+    citation_edges = list(runtime["citation_edges"].values())
+    selected_ids: set[str] = {_graph_law_id(selected_law)}
+
+    def article_degree(node_id: str) -> int:
+        return runtime["in_degree"][node_id] + runtime["out_degree"][node_id]
+
+    if selected_article != "整部法律":
+        center_id = _graph_article_id(selected_law, selected_article)
+        seen = {center_id}
+        frontier = {center_id}
+        for _depth in range(max_hops):
+            next_frontier: set[str] = set()
+            for node_id in frontier:
+                neighbors = sorted(
+                    runtime["outbound_neighbors"][node_id] | runtime["inbound_neighbors"][node_id],
+                    key=article_degree,
+                    reverse=True,
+                )
+                for neighbor_id in neighbors:
+                    if len(seen) >= max_neighbors:
+                        break
+                    if neighbor_id not in seen:
+                        seen.add(neighbor_id)
+                        next_frontier.add(neighbor_id)
+            frontier = next_frontier
+            if not frontier or len(seen) >= max_neighbors:
+                break
+        selected_ids.update(seen)
+    else:
+        own_articles = sorted(
+            runtime["article_ids_by_law"][selected_law],
+            key=article_degree,
+            reverse=True,
+        )[:max_neighbors]
+        selected_ids.update(own_articles)
+        own_set = set(own_articles)
+        external_candidates: set[str] = set()
+        for edge in citation_edges:
+            if edge["from"] in own_set and edge["to"] not in own_set:
+                external_candidates.add(edge["to"])
+            if edge["to"] in own_set and edge["from"] not in own_set:
+                external_candidates.add(edge["from"])
+        selected_ids.update(
+            sorted(external_candidates, key=article_degree, reverse=True)[: max(30, max_neighbors // 3)]
+        )
+
+    for node_id in list(selected_ids):
+        meta = article_meta.get(node_id)
+        if meta:
+            selected_ids.add(_graph_law_id(str(meta["law_title"])))
+
+    nodes: list[dict] = []
+    for node_id in sorted(selected_ids):
+        if node_id.startswith("law::"):
+            nodes.append(_law_overview_node(runtime, node_id.removeprefix("law::")))
+        else:
+            node = _article_graph_node(runtime, node_id)
+            if node:
+                nodes.append(node)
+
+    allowed_ids = {node["id"] for node in nodes}
+    edges = [
+        _containment_edge(str(article_meta[node_id]["law_title"]), node_id)
+        for node_id in allowed_ids
+        if node_id in article_meta and _graph_law_id(str(article_meta[node_id]["law_title"])) in allowed_ids
+    ]
+    edges.extend(
+        edge for edge in citation_edges
+        if edge["from"] in allowed_ids and edge["to"] in allowed_ids
+    )
+
+    return {
+        "nodes": nodes,
+        "edges": edges,
+        "stats": {
+            **_knowledge_graph_stats(runtime, "subgraph", len(nodes), len(edges)),
+            "target_law": selected_law,
+            "target_article": selected_article,
+        },
+    }
+
+
 # ============================================================
 # /counterfactual API（反事实模拟 - Direction 4）
 # ============================================================
