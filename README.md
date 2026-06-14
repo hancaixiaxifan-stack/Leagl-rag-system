@@ -1,3 +1,13 @@
+## 前端页面预览
+
+<img src="images/npc-database-screenshot.png" width="800" />
+<img src="images/%E5%B1%8F%E5%B9%95%E6%88%AA%E5%9B%BE%202026-06-13%20103835.png" width="800" />
+<img src="images/%E5%B1%8F%E5%B9%95%E6%88%AA%E5%9B%BE%202026-06-13%20104009.png" width="800" />
+<img src="images/%E5%B1%8F%E5%B9%95%E6%88%AA%E5%9B%BE%202026-06-13%20104112.png" width="800" />
+<img src="images/%E5%B1%8F%E5%B9%95%E6%88%AA%E5%9B%BE%202026-06-13%20104454.png" width="800" />
+<img src="images/%E5%B1%8F%E5%B9%95%E6%88%AA%E5%9B%BE%202026-06-13%20104512.png" width="800" />
+<img src="images/%E5%B1%8F%E5%B9%95%E6%88%AA%E5%9B%BE%202026-06-13%20110942.png" width="800" />
+
 # RAG 法律知识库系统
 
 一个面向中国法律法规的智能检索与分析系统，基于本地向量嵌入 + BM25 混合检索，支持法律咨询问答、法律漂移分析、跨法律多米诺效应检测和反事实立法模拟。
