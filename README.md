@@ -1,6 +1,5 @@
 ## 前端页面预览
 
-<img src="images/npc-database-screenshot.png" width="800" />
 <img src="images/%E5%B1%8F%E5%B9%95%E6%88%AA%E5%9B%BE%202026-06-13%20103835.png" width="800" />
 <img src="images/%E5%B1%8F%E5%B9%95%E6%88%AA%E5%9B%BE%202026-06-13%20104009.png" width="800" />
 <img src="images/%E5%B1%8F%E5%B9%95%E6%88%AA%E5%9B%BE%202026-06-13%20104112.png" width="800" />
